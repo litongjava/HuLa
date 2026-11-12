@@ -80,7 +80,7 @@
           </n-popover>
 
           <!-- 截图依赖桌面端能力，浏览器版不显示 -->
-          <div v-if="!isWeb" class="flex-center gap-2px mr-12px">
+          <div v-if="capabilities.screenshot" class="flex-center gap-2px mr-12px">
             <svg @click="handleScreenshot()">
               <use href="#screenshot"></use>
             </svg>
@@ -224,9 +224,9 @@ import { MittEnum, MobilePanelStateEnum, MsgEnum, RoomTypeEnum } from '@/enums'
 import { useChatLayoutGlobal } from '@/hooks/useChatLayout'
 import { type SelectionRange, useCommon } from '@/hooks/useCommon.ts'
 import { useGlobalShortcut } from '@/hooks/useGlobalShortcut.ts'
-import { isWeb } from '@/utils/runtime'
 import { useMitt } from '@/hooks/useMitt'
 import { useWindow } from '@/hooks/useWindow'
+import { getPlatform } from '@/platform'
 import type { FriendItem, SessionItem } from '@/services/types'
 import { useChatStore } from '@/stores/chat'
 import { useContactStore } from '@/stores/contacts'
@@ -241,6 +241,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+const { capabilities } = getPlatform()
 // 移动端组件条件导入
 const More = isMobile() ? defineAsyncComponent(() => import('@/mobile/components/chat-room/panel/More.vue')) : void 0
 const VoicePanel = isMobile()

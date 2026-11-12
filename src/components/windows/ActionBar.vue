@@ -25,7 +25,7 @@
             </svg>
           </div>
           <!--  固定在最顶层  -->
-          <div v-if="topWinLabel !== void 0 && !isWeb" @click="handleAlwaysOnTop" class="hover-box">
+          <div v-if="topWinLabel !== void 0 && capabilities.windowControls" @click="handleAlwaysOnTop" class="hover-box">
             <n-popover trigger="hover">
               <template #trigger>
                 <svg
@@ -54,7 +54,7 @@
             </svg>
           </div>
           <!-- 最小化 -->
-          <div v-if="minW && !isWeb" @click="appWindow.minimize()" class="hover-box">
+          <div v-if="minW && capabilities.windowControls" @click="appWindow.minimize()" class="hover-box">
             <svg
               :class="[iconColor !== '' ? `color-${iconColor}` : 'color-[--action-bar-icon-color]']"
               class="size-24px opacity-66 cursor-pointer">
@@ -62,7 +62,7 @@
             </svg>
           </div>
           <!-- 最大化 -->
-          <div v-if="maxW && !isWeb" @click="restoreWindow" class="hover-box">
+          <div v-if="maxW && capabilities.windowControls" @click="restoreWindow" class="hover-box">
             <svg
               v-show="!windowMaximized"
               :class="[iconColor !== '' ? `color-${iconColor}` : 'color-[--action-bar-icon-color]']"
@@ -78,7 +78,7 @@
           </div>
           <!-- 关闭窗口 -->
           <div
-            v-if="closeW && !hideWebClose"
+            v-if="closeW && capabilities.windowControls"
             @click="handleCloseWin"
             :class="{ windowMaximized: 'rounded-rt-8px' }"
             class="action-close">
@@ -143,16 +143,15 @@ import { exit } from '@tauri-apps/plugin-process'
 import { CloseBxEnum, EventEnum, MittEnum } from '@/enums'
 import { useMitt } from '@/hooks/useMitt.ts'
 import { useWindow } from '@/hooks/useWindow.ts'
+import { getPlatform } from '@/platform'
 import router from '@/router'
 import { useAlwaysOnTopStore } from '@/stores/alwaysOnTop.ts'
 import { useSettingStore } from '@/stores/setting.ts'
 import { isCompatibility, isMac, isWindows } from '@/utils/PlatformConstants'
-import { isWeb } from '@/utils/runtime'
 
 const { t } = useI18n()
+const { capabilities } = getPlatform()
 const appWindow = WebviewWindow.getCurrent()
-// 浏览器版：主窗口(登录/主页)是标签页本身，不提供最小化/最大化/置顶，也不提供关闭按钮
-const hideWebClose = isWeb && ['home', 'login'].includes(appWindow.label)
 const {
   topWinLabel,
   proxy = false,

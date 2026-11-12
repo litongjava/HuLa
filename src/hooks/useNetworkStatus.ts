@@ -5,7 +5,7 @@ import { createSharedComposable, tryOnScopeDispose } from '@vueuse/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import rustWebSocketClient, { ConnectionState } from '@/services/webSocketRust'
 import { info, warn, error as logError } from '@tauri-apps/plugin-log'
-import { isWeb } from '@/utils/runtime'
+import { getPlatform } from '@/platform'
 
 const useSharedNetworkStatus = createSharedComposable(() => {
   // 网络状态 - 基于浏览器navigator.onLine
@@ -106,9 +106,12 @@ const useSharedNetworkStatus = createSharedComposable(() => {
   }
 
   // 浏览器版的 WebSocket 状态同样通过 websocket-event 事件上报
-  const isTauriContext = () => {
+  const hasWebsocketStateEvents = () => {
     if (typeof window === 'undefined') return false
-    return isWeb || Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
+    return (
+      getPlatform().kind === 'web' ||
+      Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
+    )
   }
 
   const resolveWsState = (state: unknown): ConnectionState | null => {
@@ -137,7 +140,7 @@ const useSharedNetworkStatus = createSharedComposable(() => {
   }
 
   const initWsListener = async () => {
-    if (!isTauriContext() || wsUnlisten) return
+    if (!hasWebsocketStateEvents() || wsUnlisten) return
     try {
       wsUnlisten = await listen('websocket-event', (event) => {
         const payload = event.payload as { type?: string; state?: string }
@@ -151,7 +154,7 @@ const useSharedNetworkStatus = createSharedComposable(() => {
   }
 
   const initWsState = async () => {
-    if (!isTauriContext()) return
+    if (!hasWebsocketStateEvents()) return
     try {
       const state = await rustWebSocketClient.getState()
       updateWsState(state)

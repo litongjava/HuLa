@@ -3,7 +3,8 @@ import type { Alias, Plugin } from 'vite'
 
 /**
  * Browser build (`vite --mode web`): every Tauri module the app imports is replaced by a browser
- * implementation under src/platform/web/tauri. The desktop build uses none of these aliases.
+ * implementation under src/platform/web/tauri, and the platform adapter is replaced by
+ * src/platform/web/adapter.ts. The Tauri build uses none of these aliases.
  * Exact-match patterns keep e.g. `@tauri-apps/api/window` from catching `.../webviewWindow`.
  */
 const WEB_MODULES: Record<string, string> = {
@@ -35,11 +36,16 @@ const WEB_MODULES: Record<string, string> = {
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
 
-export const createWebAliases = (): Alias[] =>
-  Object.entries(WEB_MODULES).map(([find, file]) => ({
+export const createWebAliases = (): Alias[] => [
+  {
+    find: /^@\/platform\/adapter$/,
+    replacement: fileURLToPath(new URL('../../src/platform/web/adapter.ts', import.meta.url))
+  },
+  ...Object.entries(WEB_MODULES).map(([find, file]) => ({
     find: new RegExp(`^${escapeRegExp(find)}$`),
     replacement: fileURLToPath(new URL(`../../src/platform/web/tauri/${file}`, import.meta.url))
   }))
+]
 
 /**
  * Fails the browser build when a Tauri module without a browser replacement is imported, instead
