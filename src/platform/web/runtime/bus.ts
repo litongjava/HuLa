@@ -15,7 +15,7 @@ const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('w
 
 type BusMessage = { event: string; payload: unknown; target: EventTarget }
 type ControlHandler = (data: any) => void
-const controlHandlers = new Map<string, ControlHandler>()
+const controlHandlers = new Map<string, Set<ControlHandler>>()
 
 function targetMatches(target: EventTarget): boolean {
   if (target == null) return true
@@ -70,14 +70,26 @@ export function postControl(type: string, data: unknown) {
 }
 
 export function onControl(type: string, handler: ControlHandler) {
-  controlHandlers.set(type, handler)
+  const handlers = controlHandlers.get(type) || new Set<ControlHandler>()
+  handlers.add(handler)
+  controlHandlers.set(type, handlers)
+  return () => {
+    handlers.delete(handler)
+    if (handlers.size === 0 && controlHandlers.get(type) === handlers) controlHandlers.delete(type)
+  }
 }
 
 if (channel) {
   channel.onmessage = (e: MessageEvent) => {
     const msg = e.data || {}
     if (msg.control !== undefined) {
-      controlHandlers.get(msg.control)?.(msg.data)
+      for (const handler of [...(controlHandlers.get(msg.control) || [])]) {
+        try {
+          handler(msg.data)
+        } catch (error) {
+          console.error('[web] control handler failed', msg.control, error)
+        }
+      }
       return
     }
     if (targetMatches(msg.target)) deliver(msg.event, msg.payload)

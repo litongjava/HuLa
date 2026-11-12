@@ -1,7 +1,8 @@
 /**
- * Registry of open "windows" (tabs) so getByLabel() can tell whether a window exists, plus the
+ * Registry of open windows (pages and hosted iframes) so getByLabel() can tell whether a window exists, plus the
  * open/close behaviour that replaces native windows.
  */
+import { getHost } from '../windowHost/host'
 import { onControl, postControl } from './bus'
 import { LABEL, PAGE_WINDOWS } from './label'
 
@@ -10,6 +11,7 @@ const HEARTBEAT_MS = 3000
 const STALE_MS = 10000
 
 type Registry = Record<string, number>
+const registrations = new Map<string, () => void>()
 
 function readRegistry(): Registry {
   try {
@@ -27,7 +29,7 @@ function writeRegistry(update: (r: Registry) => void) {
   } catch {}
 }
 
-/** Labels of the tabs that are open now. */
+/** Labels of the pages and hosted windows that are open now. */
 export function openLabels(): string[] {
   const now = Date.now()
   const labels = Object.entries(readRegistry())
@@ -41,18 +43,29 @@ export function windowExists(label: string) {
   return label === LABEL || openLabels().includes(label)
 }
 
-export function registerWindow() {
+/** Removes a registration immediately, even when iframe removal does not emit pagehide. */
+export function unregisterWindow(label: string) {
+  registrations.get(label)?.()
+  registrations.delete(label)
+  writeRegistry((registry) => {
+    delete registry[label]
+  })
+}
+
+export function registerWindow(label: string = LABEL) {
+  registrations.get(label)?.()
   const beat = () =>
-    writeRegistry((r) => {
-      r[LABEL] = Date.now()
+    writeRegistry((registry) => {
+      registry[label] = Date.now()
     })
   beat()
-  setInterval(beat, HEARTBEAT_MS)
-  window.addEventListener('pagehide', () =>
-    writeRegistry((r) => {
-      delete r[LABEL]
-    })
-  )
+  const heartbeat = setInterval(beat, HEARTBEAT_MS)
+  const onPageHide = () => unregisterWindow(label)
+  window.addEventListener('pagehide', onPageHide)
+  registrations.set(label, () => {
+    clearInterval(heartbeat)
+    window.removeEventListener('pagehide', onPageHide)
+  })
 }
 
 /** Returns `location.origin + path` for a same-origin app path; anything else falls back to the origin root. */
@@ -66,8 +79,15 @@ export function sameOriginUrl(raw: string): string {
   }
 }
 
-/** Main windows replace the current page; every other window opens in a new tab named after its label. */
-export function openWindow(label: string, url?: string) {
+export interface OpenWindowOptions {
+  title?: string
+  width?: number
+  height?: number
+  modal?: boolean
+}
+
+/** Main windows replace the current page; secondary windows live in the top-level host. */
+export function openWindow(label: string, url?: string, options: OpenWindowOptions = {}) {
   const target = url || `/${label}`
   if (label === LABEL) return
   if (PAGE_WINDOWS.has(label)) {
@@ -75,12 +95,24 @@ export function openWindow(label: string, url?: string) {
     setTimeout(() => location.assign(sameOriginUrl(target)), 50)
     return
   }
-  window.open(sameOriginUrl(target), label)
+  return getHost().open({
+    label,
+    url: target,
+    title: options.title ?? label,
+    width: options.width ?? 800,
+    height: options.height ?? 600,
+    modal: options.modal ?? false
+  })
 }
 
-/** Secondary tabs were opened by window.open, so the browser lets them close themselves. */
+/** Hosted windows close through the host; legacy secondary tabs still close themselves. */
 export function closeWindow(label: string = LABEL) {
+  if (window.top !== window && label === LABEL) {
+    getHost().close(label)
+    return
+  }
   if (label !== LABEL) {
+    getHost().close(label)
     postControl('closeWindow', label)
     return
   }
@@ -88,8 +120,10 @@ export function closeWindow(label: string = LABEL) {
 }
 
 export function focusWindow(label: string) {
-  if (label !== LABEL) postControl('focusWindow', label)
-  else window.focus()
+  if (label !== LABEL) {
+    getHost().focus(label)
+    postControl('focusWindow', label)
+  } else window.focus()
 }
 
 onControl('closeWindow', (label) => {

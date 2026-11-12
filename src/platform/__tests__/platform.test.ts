@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPlatform } from '@/platform'
 import { isMobile } from '@/utils/PlatformConstants'
 import { desktopPlatform } from '../desktop'
@@ -7,6 +7,7 @@ import { mobilePlatform } from '../mobile'
 import { getPlatform as getWebPlatform } from '../web/adapter'
 import { getCurrentWebviewWindow } from '../web/tauri/api/webviewWindow'
 import { WebWindow } from '../web/tauri/api/window'
+import { closeHosted, hostedWindows } from '../web/windowHost/host'
 import { webWindows } from '../web/windows'
 
 vi.mock('@/utils/PlatformConstants', () => ({ isMobile: vi.fn() }))
@@ -85,7 +86,19 @@ describe('platform window services', () => {
     parent: 'login'
   }
 
+  beforeEach(() => {
+    // Keep iframe DOM and URL assertions without loading the app over the network in happy-dom.
+    vi.spyOn(HTMLIFrameElement.prototype, 'src', 'set').mockImplementation(function (
+      this: HTMLIFrameElement,
+      src: string
+    ) {
+      this.srcdoc = '<!doctype html><html><body></body></html>'
+      this.setAttribute('src', src)
+    })
+  })
+
   afterEach(() => {
+    for (const win of [...hostedWindows]) closeHosted(win.label)
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -98,18 +111,18 @@ describe('platform window services', () => {
     await expect(mobilePlatform.windows.openModal(modalOptions)).resolves.toBeNull()
   })
 
-  it('returns a browser window handle and opens the requested route in a named tab', async () => {
+  it('returns a browser window handle and hosts the requested route', async () => {
     vi.useFakeTimers()
-    const open = vi.spyOn(window, 'open').mockReturnValue(null)
     const win = await webWindows.open(openOptions)
     expect(win?.label).toBe('settings')
-    expect(open).toHaveBeenCalledWith(location.origin + '/settings', 'settings')
+    expect(hostedWindows).toContainEqual(
+      expect.objectContaining({ label: 'settings', src: location.origin + '/settings', modal: false })
+    )
     await vi.runOnlyPendingTimersAsync()
   })
 
   it('closes the requested window only after the browser window is created', async () => {
     vi.useFakeTimers()
-    vi.spyOn(window, 'open').mockReturnValue(null)
     const close = vi.spyOn(WebWindow.prototype, 'close').mockResolvedValue()
     const previousWindow = getCurrentWebviewWindow()
 

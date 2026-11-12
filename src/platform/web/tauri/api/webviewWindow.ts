@@ -1,13 +1,10 @@
 /** Browser replacement of @tauri-apps/api/webviewWindow */
 import { LABEL } from '../../runtime/label'
-import { windowExists } from '../../runtime/windows'
+import { type OpenWindowOptions, windowExists } from '../../runtime/windows'
 import { createWindow, getAllLabels, WebWindow, windowFor } from './window'
 
 export class WebviewWindow extends WebWindow {
-  constructor(
-    label: string,
-    options: { url?: string; title?: string; width?: number; height?: number; [key: string]: unknown } = {}
-  ) {
+  constructor(label: string, options: OpenWindowOptions & { url?: string; [key: string]: unknown } = {}) {
     super(label)
     createWindow(this, options)
   }

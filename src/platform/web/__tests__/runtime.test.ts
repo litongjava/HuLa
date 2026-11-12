@@ -4,9 +4,14 @@ import { IM_URLS } from '../commands/imUrls'
 import { sameOriginUrl } from '../runtime/windows'
 import { convertFileSrc, invoke } from '../tauri/api/core'
 import { emit, emitTo, listen } from '../tauri/api/event'
+import { LogicalSize } from '../tauri/api/dpi'
+import { hostedWindows } from '../windowHost/host'
 import { join } from '../tauri/api/path'
 import { getCurrentWebviewWindow, WebviewWindow } from '../tauri/api/webviewWindow'
 import { create, exists, readDir, readFile, stat, writeFile } from '../tauri/plugin/fs'
+
+// Host rendering is covered separately; runtime tests exercise the state and service APIs.
+vi.mock('../windowHost', () => ({ mountWindowHost: vi.fn() }))
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
 
@@ -87,14 +92,16 @@ describe('windows', () => {
     expect(sameOriginUrl(url)).toBe(location.origin + '/')
   })
 
-  it('opens a tab named after the label and reports tauri://created', async () => {
-    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+  it('opens a hosted iframe window and reports tauri://created', async () => {
     const win = new WebviewWindow('settings', { url: '/settings' })
     const created = await new Promise((resolve) => win.once('tauri://created', () => resolve(true)))
     expect(created).toBe(true)
-    expect(open).toHaveBeenCalledWith(location.origin + '/settings', 'settings')
-    // native-only calls are accepted and do nothing
-    await expect((win as any).setSize({ width: 1, height: 1 })).resolves.toBeNull()
+    expect(hostedWindows).toContainEqual(
+      expect.objectContaining({ label: 'settings', src: location.origin + '/settings' })
+    )
+    await win.setSize(new LogicalSize(320, 240))
+    expect(hostedWindows.find((item) => item.label === 'settings')).toMatchObject({ width: 320, height: 240 })
+    await win.close()
     await expect(WebviewWindow.getByLabel('does-not-exist')).resolves.toBeNull()
   })
 

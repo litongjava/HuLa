@@ -8,7 +8,8 @@ export const webWindows: WindowService = {
       url: options.url,
       title: options.title,
       width: options.width,
-      height: options.height
+      height: options.height,
+      modal: false
     })
     await win.once('tauri://created', async () => {
       if (options.closeAfterCreated) {
@@ -29,7 +30,8 @@ export const webWindows: WindowService = {
       url: `/${options.label}`,
       title: options.title,
       width: options.width,
-      height: options.height
+      height: options.height,
+      modal: true
     })
     await win.once('tauri://created', async () => {
       if (options.payload) {

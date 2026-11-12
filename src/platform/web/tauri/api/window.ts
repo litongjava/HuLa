@@ -1,13 +1,15 @@
 /**
  * Browser replacement of @tauri-apps/api/window, also the base of webview and webviewWindow.
  *
- * Every window is a browser tab. Size, position and decoration calls have no effect; show/focus
- * focuses the tab, close closes secondary tabs. Methods that are not implemented resolve to null.
+ * Main windows are pages; secondary windows are hosted iframes. Unsupported native methods
+ * resolve to null.
  */
-import { addListener, emitEvent, removeListener } from '../../runtime/bus'
+import { addListener, emitEvent, onControl, removeListener } from '../../runtime/bus'
 import { LABEL, log } from '../../runtime/label'
 import { storeBrowserFile } from '../../runtime/vfs'
 import { closeWindow, focusWindow, openLabels, openWindow, windowExists } from '../../runtime/windows'
+import type { OpenWindowOptions } from '../../runtime/windows'
+import { getHost } from '../../windowHost/host'
 import { LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize } from './dpi'
 import type { EventCallback, EventName, EventTarget, UnlistenFn } from './event'
 
@@ -241,6 +243,10 @@ export class WebWindow {
   async destroy() {
     closeWindow(this.label)
   }
+  async setSize(size: LogicalSize | PhysicalSize) {
+    const scale = size.type === 'Physical' ? window.devicePixelRatio || 1 : 1
+    getHost().resize(this.label, size.width / scale, size.height / scale)
+  }
   async setTitle(title: string) {
     if (this.label === LABEL) document.title = title
   }
@@ -267,7 +273,6 @@ const NATIVE_ONLY = [
   'unmaximize',
   'toggleMaximize',
   'center',
-  'setSize',
   'setMinSize',
   'setMaxSize',
   'setSizeConstraints',
@@ -318,13 +323,20 @@ export function windowFor(label: string): WebWindow {
   return win
 }
 
-/** Opens a new window (tab) and reports tauri://created, or tauri://error when it already exists. */
-export function createWindow(
-  win: WebWindow,
-  options: { url?: string; title?: string; width?: number; height?: number } = {}
-) {
-  const exists = windowExists(win.label)
-  if (!exists) openWindow(win.label, options.url)
+/** Delivers host closure to handles held in this context. */
+export function notifyWindowDestroyed(label: string) {
+  const win = instances.get(label)
+  win?.emitLocal('tauri://close-requested', null)
+  win?.emitLocal('tauri://destroyed', null)
+  if (instances.get(label) === win) instances.delete(label)
+}
+
+onControl('windowDestroyed', notifyWindowDestroyed)
+
+/** Opens a new window and reports tauri://created, or tauri://error when it already exists. */
+export function createWindow(win: WebWindow, options: OpenWindowOptions & { url?: string } = {}) {
+  const exists = windowExists(win.label) || openWindow(win.label, options.url, options) === false
+  if (!exists) instances.set(win.label, win)
   setTimeout(() => {
     if (exists) win.emitLocal('tauri://error', `a window with label \`${win.label}\` already exists`)
     else win.emitLocal('tauri://created', null)
@@ -400,7 +412,7 @@ function bindFileDrop(handler: (payload: DragDropEvent) => void): UnlistenFn {
 }
 
 export class Window extends WebWindow {
-  constructor(label: string, options: { url?: string; title?: string; width?: number; height?: number } = {}) {
+  constructor(label: string, options: OpenWindowOptions & { url?: string } = {}) {
     super(label)
     createWindow(this, options)
   }
