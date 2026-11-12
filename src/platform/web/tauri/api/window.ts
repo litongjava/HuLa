@@ -319,7 +319,10 @@ export function windowFor(label: string): WebWindow {
 }
 
 /** Opens a new window (tab) and reports tauri://created, or tauri://error when it already exists. */
-export function createWindow(win: WebWindow, options: { url?: string } = {}) {
+export function createWindow(
+  win: WebWindow,
+  options: { url?: string; title?: string; width?: number; height?: number } = {}
+) {
   const exists = windowExists(win.label)
   if (!exists) openWindow(win.label, options.url)
   setTimeout(() => {
@@ -397,7 +400,7 @@ function bindFileDrop(handler: (payload: DragDropEvent) => void): UnlistenFn {
 }
 
 export class Window extends WebWindow {
-  constructor(label: string, options: { url?: string } = {}) {
+  constructor(label: string, options: { url?: string; title?: string; width?: number; height?: number } = {}) {
     super(label)
     createWindow(this, options)
   }
