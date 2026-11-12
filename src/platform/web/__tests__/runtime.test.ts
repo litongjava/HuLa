@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { auth, request } from '../commands/http'
 import { IM_URLS } from '../commands/imUrls'
+import { sameOriginUrl } from '../runtime/windows'
 import { convertFileSrc, invoke } from '../tauri/api/core'
 import { emit, emitTo, listen } from '../tauri/api/event'
 import { join } from '../tauri/api/path'
@@ -72,12 +73,26 @@ describe('events', () => {
 })
 
 describe('windows', () => {
+  it('preserves same-origin paths, queries and fragments', () => {
+    expect(sameOriginUrl('/settings?a=1')).toBe(location.origin + '/settings?a=1')
+    expect(sameOriginUrl(location.origin + '/settings?a=1#profile')).toBe(location.origin + '/settings?a=1#profile')
+  })
+
+  it.each([
+    'javascript:alert(1)',
+    'https://evil.example/x',
+    '//evil.example/x',
+    'https://[invalid'
+  ])('falls back to the origin root for %s', (url) => {
+    expect(sameOriginUrl(url)).toBe(location.origin + '/')
+  })
+
   it('opens a tab named after the label and reports tauri://created', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     const win = new WebviewWindow('settings', { url: '/settings' })
     const created = await new Promise((resolve) => win.once('tauri://created', () => resolve(true)))
     expect(created).toBe(true)
-    expect(open).toHaveBeenCalledWith('/settings', 'settings')
+    expect(open).toHaveBeenCalledWith(location.origin + '/settings', 'settings')
     // native-only calls are accepted and do nothing
     await expect((win as any).setSize({ width: 1, height: 1 })).resolves.toBeNull()
     await expect(WebviewWindow.getByLabel('does-not-exist')).resolves.toBeNull()

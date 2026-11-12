@@ -55,16 +55,27 @@ export function registerWindow() {
   )
 }
 
+/** Returns `location.origin + path` for a same-origin app path; anything else falls back to the origin root. */
+export function sameOriginUrl(raw: string): string {
+  try {
+    const url = new URL(raw, location.origin)
+    if (url.origin !== location.origin) return location.origin + '/'
+    return location.origin + url.pathname + url.search + url.hash
+  } catch {
+    return location.origin + '/'
+  }
+}
+
 /** Main windows replace the current page; every other window opens in a new tab named after its label. */
 export function openWindow(label: string, url?: string) {
   const target = url || `/${label}`
   if (label === LABEL) return
   if (PAGE_WINDOWS.has(label)) {
     window.name = label
-    setTimeout(() => location.assign(target), 50)
+    setTimeout(() => location.assign(sameOriginUrl(target)), 50)
     return
   }
-  window.open(target, label)
+  window.open(sameOriginUrl(target), label)
 }
 
 /** Secondary tabs were opened by window.open, so the browser lets them close themselves. */

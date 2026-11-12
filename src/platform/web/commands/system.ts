@@ -3,10 +3,10 @@
  */
 import { API_BASE, WS_URL } from '../runtime/config'
 import { log } from '../runtime/label'
+import { createOauthSecret } from '../runtime/oauth'
 import { registerCommands } from './registry'
 
 const PAYLOAD_PREFIX = '__web_payload:'
-export const OAUTH_SECRET_KEY = '__web_oauth_secret'
 
 const escapeHtml = (text: string) => text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
 const preformatted = (text: string) => `<pre style="white-space:pre-wrap">${escapeHtml(text)}</pre>`
@@ -48,10 +48,9 @@ registerCommands({
   },
 
   // The desktop app listens on a local port for the OAuth redirect. Here the redirect comes back to
-  // this origin; the callback tab checks the one-time secret (see runtime/oauth.ts).
+  // this origin; the initiating tab checks the one-time secret (see runtime/oauth.ts).
   start_oauth_server() {
-    const secret = crypto.randomUUID?.() || String(Math.random()).slice(2) + Date.now()
-    localStorage.setItem(OAUTH_SECRET_KEY, secret)
+    const secret = createOauthSecret()
     return { port: Number(location.port) || (location.protocol === 'https:' ? 443 : 80), secret }
   },
 
